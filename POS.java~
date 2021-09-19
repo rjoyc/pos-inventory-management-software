@@ -1,0 +1,187 @@
+import java.util.ArrayList; // Import ArrayList utility for arraylists
+//import java.util.Scanner; // Import Scanner class
+
+public class POS {
+  // point of sales
+  
+   /* ********************************************************************
+   * Author: Rachel Joy Copreros   Date: December 07, 2020
+   * POS.java
+   * Description: 
+   * ******************************************************************** */
+  
+  ArrayList<Product> cart = new ArrayList<Product>(); // will be passed to point of sales class
+  ArrayList<Customer> customers = new ArrayList<Customer>();
+  ArrayList<Product> inventory = new ArrayList<Product>();
+  ArrayList<Product> backorders = new ArrayList<Product>(); 
+  ErrorGuard check = new ErrorGuard();
+  //Scanner input = new Scanner(System.in);
+  
+  // Declare and initialize class variables
+  int boQty;
+  int id, productNum, choice;
+  String fn, ln, phone;
+  final double HST = 0.13;
+  
+  public POS (ArrayList<Product> purchases, ArrayList<Product> inv, ArrayList<Customer> cus) {
+    cart = purchases;
+    inventory = inv;
+    customers = cus;
+  }
+  
+  public void backorderPickUp (int id) { // for when customers with backordered items return - and item is now in stock
+    InvManagement iMgt = new InvManagement(inventory);
+    CustManagement cMgt = new CustManagement(customers);
+    //customers = list;
+    int index = check.findIndex(customers, id); // do this for all of them - where find index is used
+    if (!(customers.get(index).bOrders.isEmpty())){ // if the customer has backordered items
+      for (int i = 0; i < customers.get(index).bOrders.size(); i++) {
+        int pNum = customers.get(index).bOrders.get(i);
+        int invIndex = check.findIndex(inventory, pNum);
+        if (inventory.get(invIndex).quantity >= 1) { // would this be inventory.get(invIndex).bQty or 1?
+          System.out.print("Customer's Backordered Item is ready for pick up: " + iMgt.displayProduct(invIndex)); // at end
+          cMgt.removeBItems(id, pNum);
+          iMgt.removeBItem(id, pNum);
+          iMgt.removeItem(pNum);
+        } else {
+          System.out.print("Customer's Backordered Item is not ready for pick up: " + iMgt.displayProduct(invIndex)); // show product info
+          continue;
+        }
+        backorderPickUp(id); // recursive method?
+      }
+    }
+  }
+  
+  public void orderDeskC () { //ArrayList<Customer> list
+    CustManagement cMgt = new CustManagement(customers);
+    System.out.println("Customer Information");
+    do {
+      System.out.println("Enter Customer ID: (Enter 000000 for New Cusomters)"); // continue asking 
+      id = check.minimum(); 
+      if (check.verify(customers, id)) {
+        System.out.println("Welcome Back, " + customers.get(check.findIndex(customers, id)).getName() + "! ");
+        backorderPickUp(id); 
+      } 
+      else {
+        if (id == 000000) {
+          System.out.println("New customer! Let's add you to our database!");
+          cMgt.addCustomer();
+          id = customers.get(customers.size() - 1).getID(); // last customer id is the newest customer added
+          break;
+        } else
+          System.out.println("This ID does not exist. Please enter a valid Customer ID.");
+      }
+    } while (!(check.verify(customers, id)));
+  }
+  
+  public void orderDeskP () { // loop this method when make menu for adding purchases
+    int qty = 0;
+    InvManagement iMgt = new InvManagement(inventory);
+    CustManagement cMgt = new CustManagement(customers);
+    
+    System.out.println("\nOrder Information");
+    iMgt.askPN("to purchase");
+    productNum = iMgt.getPN();
+    int index = check.findIndex(inventory, productNum);
+    
+    if (check.verify(inventory, productNum)) {
+      //int index = check.findIndex(inventory, productNum);
+      System.out.print("This product exists.");
+      if (!(inventory.get(index).inStock())){ // inStock returns true if available stock > 0
+        System.out.println(" But it is out of stock. Available Stock: " + inventory.get(index).getAvailStock() + "\nWould you like to backorder this item?\n"
+                          + "1 - Yes\n"
+                          + "2 - No");
+        int bChoice = check.range("This is not one of the menu options", 1, 2);
+        switch (bChoice){
+          case 1: 
+            System.out.println("How many items would you like to backorder? ");
+            boQty = check.minimum();
+            for (int i = 0; i < boQty; i++){
+              iMgt.addBItem(id, productNum); 
+              cMgt.addBItems(id, productNum); 
+              backorders.add(inventory.get(index)); 
+            }
+            break;
+          case 2: break;
+        }
+      } else {
+        System.out.println(" It is also in stock. Available Stock: " + inventory.get(index).getAvailStock());
+        System.out.println("How many items of this product would you like? ");
+        qty = check.minimum();
+        int avail = inventory.get(index).getAvailStock(); 
+        if (qty > avail){
+          boQty = qty - avail;
+          System.out.println("There are only " + inventory.get(index).getAvailStock() + " item(s) available in stock for this product.\n"
+                           + "Would you like to backorder the other " + boQty + " item(s)?\n"
+                           + "1 - Yes\n"
+                           + "2 - No");
+          int bOption = check.range("This is not one of the menu options", 1, 2);
+          switch (bOption) {
+            case 1:
+              qty = qty - boQty;
+              for (int i = 0; i < boQty; i++){
+              iMgt.addBItem(id, productNum); 
+              cMgt.addBItems(id, productNum);
+              backorders.add(inventory.get(index));
+              }
+              break;
+            case 2: qty = qty - boQty; break;
+          }
+        }
+        for (int i = 0; i < qty; i++){
+          cart.add(inventory.get(index));
+          int cartIndex = check.findIndex(cart, inventory.get(index).getPNum());
+          iMgt.removeItem(cart.get(cartIndex).getPNum());
+        }
+        System.out.println("Purchase(s) added to cart.");
+      }
+    }
+  }
+
+  public void displayOrderPick () {
+    
+    System.out.println("Customer " + id + ", " + customers.get(check.findIndex(customers, id)).getName());
+    InvManagement purchases = new InvManagement(cart);
+    System.out.println("Products to Pick \n" + purchases.toString(1));
+    InvManagement customerBackorders = new InvManagement(backorders);
+    System.out.println("Customer's Backorders \n" + customerBackorders.toString(1));
+  }
+  
+  public void checkOut () {
+    InvManagement purchases = new InvManagement(inventory);
+    CustManagement cMgt = new CustManagement(customers);
+    double subtotal = 0;
+    for (int i = 0; i < cart.size(); i++){
+      subtotal += cart.get(i).getPrice();
+    }
+    for (int i = 0; i < backorders.size(); i++){
+      subtotal += backorders.get(i).getPrice();
+    }
+    double tax = subtotal * HST;
+    double total = subtotal + tax;
+    System.out.printf("Subtotal: $%.2f\nTax: $%.2f\nTotal: $%.2f\n\n", subtotal, tax, total);
+    System.out.println("Confirm purchase?\n"
+                     + "1 - Yes, I confirm.\n"
+                     + "2 - No, cancel please.");
+    choice = check.range("This is not one of the menu options", 1, 3);
+    switch (choice) {
+      case 1:
+        System.out.println("Purchase Confirmed.");
+        break;
+      case 2:
+        //System.out.println();
+        for (int i = 0; i < backorders.size(); i++) {
+          productNum = backorders.get(i).getPNum(); //change to backorders
+          purchases.removeBItem(id, productNum);
+          cMgt.removeBItems(id, productNum);
+      }
+        for (int i = 0; i < cart.size(); i++){
+          purchases.addItem(cart.get(i).getPNum());
+        }
+        System.out.println("Purchase Cancelled.");
+        break;
+    }
+    cart.clear();
+    backorders.clear();
+  }
+}
